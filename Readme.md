@@ -11,9 +11,8 @@ Répertoire contenant des petits projets à but comique et non pour nuire.
 
 Ce script réaliser en python utiliser des bibliothéques et il important de les installer pour eviter tous problémes :
 
-    ```
     pip install python-dotenv pyperclip keyboard Pillow winotify google-generativeai
-    ```
+
 
 # 🔑 API
 
@@ -28,7 +27,6 @@ Vous pourrais créer des clés, à noter que pour acceder a la plateforme il fau
 Pour fonctionner correctement, il vous faudra créer un fichier .env dans le même dossier que votre script python et il y faudra y inscrire les informations suivantes :
 
 
-    ```
     # Clé API Google Gemini
     GEMINI_API_KEY=Votre_clé_api_gemini
 
@@ -40,4 +38,3 @@ Pour fonctionner correctement, il vous faudra créer un fichier .env dans le mê
 
     #Afficher les Popup
     SHOW_POPUP=FALSE
-    ```
