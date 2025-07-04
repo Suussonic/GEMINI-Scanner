@@ -1,6 +1,6 @@
 # 🔎 GEMINI Scanner 
 
-Répertoire contenant des petits projets à but comique et non pour nuire.
+Répertoire permettant de scanner l'écran et l'envoi à gemini.
 
 ## 📜 Sommaire
 - [Dépendances](#🐍dépendances)
