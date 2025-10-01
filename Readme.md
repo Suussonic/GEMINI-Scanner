@@ -38,3 +38,12 @@ Pour fonctionner correctement, il vous faudra créer un fichier .env dans le mê
 
     #Afficher les Popup
     SHOW_POPUP=FALSE
+
+    # Affichage de la popup (nouvelle variable principale)
+    SHOWWINDOWSPOPUP=true
+
+    # Écriture automatique dans la fenêtre active
+    AUTOWRITER=true
+    
+    # Message / prompt envoyé à Gemini
+    MESSAGE=Analyse cette image et donne une réponse concise à la question qu'elle contient, sans détail :
