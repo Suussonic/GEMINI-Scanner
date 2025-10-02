@@ -45,5 +45,8 @@ Pour fonctionner correctement, il vous faudra créer un fichier .env dans le mê
     # Écriture automatique dans la fenêtre active
     AUTOWRITER=true
     
+    # Mode de timing réel (delais humains). Mettre false pour écriture rapide.
+    REALTIMING=true
+
     # Message / prompt envoyé à Gemini
     MESSAGE=Analyse cette image et donne une réponse concise à la question qu'elle contient, sans détail :

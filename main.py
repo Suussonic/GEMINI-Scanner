@@ -6,6 +6,7 @@ import pyperclip
 import logging
 from logging.handlers import RotatingFileHandler
 import keyboard
+import random
 from PIL import ImageGrab, Image
 from io import BytesIO
 
@@ -23,6 +24,24 @@ MESSAGE = os.getenv(
 ).strip()
 # Ecriture automatique de la réponse dans la fenêtre active
 AUTOWRITER = os.getenv("AUTOWRITER", "true").strip().lower() in ("1", "true", "yes", "on")
+REALTIMING = os.getenv("REALTIMING", "true").strip().lower() in ("1", "true", "yes", "on")
+
+# Délais d'écriture configurables (en secondes)
+try:
+    # Délai avant de commencer à taper
+    AUTOWRITER_START_DELAY = max(0.0, float(os.getenv("AUTOWRITER_START_DELAY", "0.8")))
+except Exception:
+    AUTOWRITER_START_DELAY = 0.8
+try:
+    # Délai moyen entre caractères (vise ~40-50 WPM ≈ 0,24-0,3s/car)
+    AUTOWRITER_CHAR_DELAY = max(0.0, float(os.getenv("AUTOWRITER_CHAR_DELAY", "0.25")))
+except Exception:
+    AUTOWRITER_CHAR_DELAY = 0.25
+try:
+    # Variabilité pour un rythme plus naturel (± secondes autour du délai moyen)
+    AUTOWRITER_JITTER = max(0.0, float(os.getenv("AUTOWRITER_JITTER", "0.08")))
+except Exception:
+    AUTOWRITER_JITTER = 0.08
 
 # ==== Configuration depuis .env (existante) ====
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -54,6 +73,10 @@ else:
     if not already:
         logger.addHandler(handler)
 logger.info("=== Démarrage du script Gemini Scanner (multimodal) ===")
+logger.info(
+    f"Config AUTOWRITER={'ON' if AUTOWRITER else 'OFF'} | REALTIMING={'ON' if REALTIMING else 'OFF'} | "
+    f"start_delay={AUTOWRITER_START_DELAY}s | char_delay={AUTOWRITER_CHAR_DELAY}s | jitter=±{AUTOWRITER_JITTER}s"
+)
 
 # ==== Notifications via winotify ====
 try:
@@ -114,18 +137,37 @@ def get_clipboard_image():
 # ---- Fonction pour écrire automatiquement la réponse ----
 
 def type_answer(text: str):
-    """Tape la réponse dans la fenêtre active, respecte \n."""
+    """Tape la réponse dans la fenêtre active.
+
+    REALTIMING=True  -> frappe "humaine" (delai configuré + jitter).
+    REALTIMING=False -> mode rapide (ancienne version: ~0.004s par char, start_delay 0.4s).
+    """
     if not text:
         return
     try:
-        time.sleep(0.4)  # laisse le temps de se placer
-        for ch in text:
-            if ch == '\n':
-                keyboard.send('enter')
-            else:
-                keyboard.write(ch)
-            time.sleep(0.004)
-        logger.info("Réponse écrite automatiquement (AUTOWRITER activé).")
+        if REALTIMING:
+            # Mode naturel
+            time.sleep(AUTOWRITER_START_DELAY)
+            for ch in text:
+                if ch == '\n':
+                    keyboard.send('enter')
+                else:
+                    keyboard.write(ch)
+                delay = AUTOWRITER_CHAR_DELAY
+                if AUTOWRITER_JITTER > 0:
+                    delay = max(0.0, AUTOWRITER_CHAR_DELAY + random.uniform(-AUTOWRITER_JITTER, AUTOWRITER_JITTER))
+                time.sleep(delay)
+            logger.info("AUTOWRITER terminé (mode REALTIMING).")
+        else:
+            # Mode rapide hérité
+            time.sleep(0.4)
+            for ch in text:
+                if ch == '\n':
+                    keyboard.send('enter')
+                else:
+                    keyboard.write(ch)
+                time.sleep(0.004)
+            logger.info("AUTOWRITER terminé (mode rapide).")
     except Exception as e:
         logger.error(f"Erreur AUTOWRITER: {e}")
 
