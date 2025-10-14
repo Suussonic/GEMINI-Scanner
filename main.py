@@ -25,6 +25,7 @@ MESSAGE = os.getenv(
 # Ecriture automatique de la réponse dans la fenêtre active
 AUTOWRITER = os.getenv("AUTOWRITER", "true").strip().lower() in ("1", "true", "yes", "on")
 REALTIMING = os.getenv("REALTIMING", "true").strip().lower() in ("1", "true", "yes", "on")
+HUMANSPEED = os.getenv("HUMANSPEED", "false").strip().lower() in ("1", "true", "yes", "on")
 
 # Délais d'écriture configurables (en secondes)
 try:
@@ -77,6 +78,28 @@ logger.info(
     f"Config AUTOWRITER={'ON' if AUTOWRITER else 'OFF'} | REALTIMING={'ON' if REALTIMING else 'OFF'} | "
     f"start_delay={AUTOWRITER_START_DELAY}s | char_delay={AUTOWRITER_CHAR_DELAY}s | jitter=±{AUTOWRITER_JITTER}s"
 )
+
+# Charge dynamiquement le module 'human typing.py' si HUMANSPEED activé
+human_typing_func = None
+if HUMANSPEED:
+    try:
+        import importlib.util
+        module_path = os.path.join(BASE_DIR, 'human typing.py')
+        spec = importlib.util.spec_from_file_location('human_typing_module', module_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        human_typing_func = getattr(mod, 'human_like_typing', None)
+        if human_typing_func is None:
+            logger.warning("Le fichier 'human typing.py' ne contient pas la fonction human_like_typing().")
+            HUMANSPEED = False
+        else:
+            logger.info("human_like_typing chargé depuis 'human typing.py'.")
+    except FileNotFoundError:
+        logger.warning("Fichier 'human typing.py' introuvable. HUMANSPEED désactivé.")
+        HUMANSPEED = False
+    except Exception as e:
+        logger.warning(f"Erreur chargement human typing: {e}. HUMANSPEED désactivé.")
+        HUMANSPEED = False
 
 # ==== Notifications via winotify ====
 try:
@@ -224,7 +247,17 @@ def capture_et_analyse():
 
     # 1) Écriture automatique d'abord (sinon la popup prend le focus et la frappe s'arrête)
     if AUTOWRITER:
-        type_answer(answer)
+        if HUMANSPEED and human_typing_func:
+            # Utilise module externe pour frapper de façon humaine
+            try:
+                # human_like_typing attend le texte et quelques paramètres; on passe des valeurs raisonnables
+                human_typing_func(answer, base_delay=AUTOWRITER_CHAR_DELAY, random_factor=AUTOWRITER_JITTER, typo_chance=0.04)
+                logger.info("Réponse écrite avec human_like_typing.")
+            except Exception as e:
+                logger.error(f"Erreur human_like_typing: {e}. Retour au type_answer.")
+                type_answer(answer)
+        else:
+            type_answer(answer)
 
     # (Popup supprimée, plus d'affichage Tkinter)
 

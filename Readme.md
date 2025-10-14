@@ -50,3 +50,6 @@ Pour fonctionner correctement, il vous faudra créer un fichier .env dans le mê
 
     # Message / prompt envoyé à Gemini
     MESSAGE=Analyse cette image et donne une réponse concise à la question qu'elle contient, sans détail :
+
+    # Mettre HUMANSPEED=true pour activer, false pour garder le comportement interne
+    HUMANSPEED=true
