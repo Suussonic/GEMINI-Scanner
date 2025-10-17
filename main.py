@@ -79,6 +79,10 @@ logger.info(
     f"start_delay={AUTOWRITER_START_DELAY}s | char_delay={AUTOWRITER_CHAR_DELAY}s | jitter=±{AUTOWRITER_JITTER}s"
 )
 
+# Raccourci configuré via .env
+INPUT_HOTKEY = os.getenv('INPUT', 'ctrl+alt+g')
+logger.info(f"Raccourci d'entrée configuré: {INPUT_HOTKEY}")
+
 # Charge dynamiquement le module 'human typing.py' si HUMANSPEED activé
 human_typing_func = None
 if HUMANSPEED:
@@ -269,7 +273,7 @@ def capture_et_analyse():
 
 def ecoute_clavier():
     logger.info("Initialisation des raccourcis clavier")
-    keyboard.add_hotkey('ctrl+alt+g', lambda: threading.Thread(target=capture_et_analyse, daemon=True).start())
+    keyboard.add_hotkey(INPUT_HOTKEY, lambda: threading.Thread(target=capture_et_analyse, daemon=True).start())
     keyboard.add_hotkey('F10', lambda: (
         logger.info("Touche panic F10 pressée, arrêt du script."),
         os._exit(0)
