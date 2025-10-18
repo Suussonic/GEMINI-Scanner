@@ -54,7 +54,5 @@ Pour fonctionner correctement, il vous faudra créer un fichier .env dans le mê
     # Mettre HUMANSPEED=true pour activer, false pour garder le comportement interne
     HUMANSPEED=true
 
-    # === Raccourci d'entrée (INPUT) ===
     # Définissez ici la combinaison clavier qui déclenche la capture/analyse.
-    # Exemples valides : ctrl+alt+g  ;  shift+F9  ;  alt+print_screen
     INPUT=ctrl+alt+g
