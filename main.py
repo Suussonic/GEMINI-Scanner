@@ -83,6 +83,14 @@ logger.info(
 INPUT_HOTKEY = os.getenv('INPUT', 'ctrl+alt+g')
 logger.info(f"Raccourci d'entrée configuré: {INPUT_HOTKEY}")
 
+# Raccourcis stop / end depuis .env
+STOPINPUT_HOTKEY = os.getenv('STOPINPUT', 'ctrl+alt+s')
+ENDINPUT_HOTKEY = os.getenv('ENDINPUT', 'F10')
+logger.info(f"Raccourci stop typing: {STOPINPUT_HOTKEY} | Raccourci end program: {ENDINPUT_HOTKEY}")
+
+# Event pour arrêter la frappe en cours
+STOP_TYPING_EVENT = threading.Event()
+
 # Charge dynamiquement le module 'human typing.py' si HUMANSPEED activé
 human_typing_func = None
 if HUMANSPEED:
@@ -254,8 +262,11 @@ def capture_et_analyse():
         if HUMANSPEED and human_typing_func:
             # Utilise module externe pour frapper de façon humaine
             try:
-                # human_like_typing attend le texte et quelques paramètres; on passe des valeurs raisonnables
-                human_typing_func(answer, base_delay=AUTOWRITER_CHAR_DELAY, random_factor=AUTOWRITER_JITTER, typo_chance=0.04)
+                # human_like_typing peut accepter un param stop_event; on tente de l'appeler avec
+                try:
+                    human_typing_func(answer, base_delay=AUTOWRITER_CHAR_DELAY, random_factor=AUTOWRITER_JITTER, typo_chance=0.04, stop_event=STOP_TYPING_EVENT)
+                except TypeError:
+                    human_typing_func(answer, base_delay=AUTOWRITER_CHAR_DELAY, random_factor=AUTOWRITER_JITTER, typo_chance=0.04)
                 logger.info("Réponse écrite avec human_like_typing.")
             except Exception as e:
                 logger.error(f"Erreur human_like_typing: {e}. Retour au type_answer.")
@@ -274,11 +285,15 @@ def capture_et_analyse():
 def ecoute_clavier():
     logger.info("Initialisation des raccourcis clavier")
     keyboard.add_hotkey(INPUT_HOTKEY, lambda: threading.Thread(target=capture_et_analyse, daemon=True).start())
-    keyboard.add_hotkey('F10', lambda: (
-        logger.info("Touche panic F10 pressée, arrêt du script."),
+    keyboard.add_hotkey(STOPINPUT_HOTKEY, lambda: (
+        logger.info("Raccourci STOPINPUT pressé, arrêt de la frappe en cours."),
+        STOP_TYPING_EVENT.set()
+    ))
+    keyboard.add_hotkey(ENDINPUT_HOTKEY, lambda: (
+        logger.info("Raccourci ENDINPUT pressé, arrêt du script."),
         os._exit(0)
     ))
-    logger.info("En attente de Ctrl+Alt+G (capture) ou F10 (arrêt)")
+    logger.info(f"En attente de {INPUT_HOTKEY} (capture), {STOPINPUT_HOTKEY} (stop) ou {ENDINPUT_HOTKEY} (fin)")
     keyboard.wait()
 
 if __name__ == "__main__":

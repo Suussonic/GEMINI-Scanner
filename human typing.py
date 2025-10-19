@@ -37,7 +37,7 @@ def _build_neighbor_map():
 NEIGHBORS = _build_neighbor_map()
 
 
-def human_like_typing(text, base_delay=0.08, random_factor=0.04, typo_chance=0.12, long_pause_chance=0.02, long_pause_max=3.0, neighbor_chance=0.75):
+def human_like_typing(text, base_delay=0.08, random_factor=0.04, typo_chance=0.12, long_pause_chance=0.02, long_pause_max=3.0, neighbor_chance=0.75, stop_event=None):
     """Simulate more human-like typing.
 
     Features:
@@ -61,6 +61,9 @@ def human_like_typing(text, base_delay=0.08, random_factor=0.04, typo_chance=0.1
     i = 0
     n = len(text)
     while i < n:
+        # Respect stop event if provided
+        if stop_event is not None and getattr(stop_event, 'is_set', lambda: False)():
+            return
         ch = text[i]
 
         # Rare long pause to simulate thinking (e.g., 1-3s)
@@ -128,6 +131,10 @@ def human_like_typing(text, base_delay=0.08, random_factor=0.04, typo_chance=0.1
         else:
             keyboard.write(ch)
 
+        # Allow interruption after typing char
+        if stop_event is not None and getattr(stop_event, 'is_set', lambda: False)():
+            return
+
         # compute delay: base +/- random; faster inside words sometimes
         delay = base_delay + random.uniform(-random_factor, random_factor)
         # If previous and current are both letters, sometimes speed up
@@ -142,6 +149,8 @@ def human_like_typing(text, base_delay=0.08, random_factor=0.04, typo_chance=0.1
         i += 1
 
     # small final pause
+    if stop_event is not None and getattr(stop_event, 'is_set', lambda: False)():
+        return
     time.sleep(random.uniform(0.05, 0.25))
 
 def main():
