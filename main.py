@@ -169,6 +169,82 @@ def get_clipboard_image():
         logger.error(f"Erreur clipboard: {e}")
         return None
 
+
+def preflight_check():
+    """Vérifie rapidement que les éléments essentiels sont prêts :
+    - clé API présente et test de requête Gemini
+    - capture écran fonctionnelle
+    - module human typing chargé si demandé
+    - notifications disponibles
+    Affiche un résumé dans la console, log et envoie une notification.
+    Retourne True si tout est OK, False sinon.
+    """
+    print("=== Pré-check Gemini Scanner ===")
+    logger.info("Exécution du pré-check...")
+    all_ok = True
+
+    # Vérification clé API
+    if not GEMINI_API_KEY:
+        print("- GEMINI_API_KEY: MISSING")
+        logger.error("GEMINI_API_KEY absent ou vide.")
+        all_ok = False
+    else:
+        # Test minimal vers Gemini (sans image) pour s'assurer que l'API répond
+        try:
+            test_prompt = "Répond seulement READY"
+            response = gemini_model.generate_content([test_prompt])
+            res_text = (response.text or "").strip()
+            snippet = res_text.replace('\n', ' ')[:200]
+            print(f"- Gemini API: OK (réponse: {snippet})")
+            logger.info(f"Preflight: réponse Gemini reçue ({len(res_text)} caractères)")
+        except Exception as e:
+            print(f"- Gemini API: ERREUR: {e}")
+            logger.error(f"Preflight Gemini error: {e}")
+            all_ok = False
+
+    # Vérification capture écran
+    try:
+        img = ImageGrab.grab(bbox=CAPTURE_BBOX)
+        if img is None:
+            print("- Capture écran: ERREUR (retour None)")
+            logger.error("Preflight capture returned None")
+            all_ok = False
+        else:
+            print(f"- Capture écran: OK ({img.size[0]}x{img.size[1]})")
+            logger.info("Capture écran check OK")
+    except Exception as e:
+        print(f"- Capture écran: ERREUR: {e}")
+        logger.error(f"Preflight capture error: {e}")
+        all_ok = False
+
+    # Vérification human typing
+    if HUMANSPEED:
+        module_path = os.path.join(BASE_DIR, 'human typing.py')
+        if human_typing_func:
+            print("- Human typing module: LOADED")
+        else:
+            print(f"- Human typing module: MISSING or failed to load ({module_path})")
+            logger.warning("Human typing requested but not loaded.")
+            all_ok = False
+
+    # Notifications
+    if USE_WINOTIFY:
+        print("- Notifications: winotify available")
+    else:
+        print("- Notifications: winotify NOT available (utilise logs)")
+
+    # Raccourcis
+    print(f"- Hotkey capture: {INPUT_HOTKEY} | stop: {STOPINPUT_HOTKEY} | end: {ENDINPUT_HOTKEY}")
+
+    if all_ok:
+        notify_toast("Gemini Scanner", "Pré-check OK — prêt à l'emploi")
+        logger.info("Pré-check OK — prêt.")
+    else:
+        notify_toast("Gemini Scanner", "Pré-check échoué — voir console/logs")
+
+    print("=== Pré-check terminé ===")
+    return all_ok
+
 # ---- Fonction pour écrire automatiquement la réponse ----
 
 def type_answer(text: str):
@@ -298,6 +374,11 @@ def ecoute_clavier():
 
 if __name__ == "__main__":
     try:
+        # Run preflight check before starting keyboard listeners
+        ok = preflight_check()
+        if not ok:
+            logger.error("Pré-check terminé: problèmes détectés. Arrêt du script.")
+            sys.exit(1)
         ecoute_clavier()
     except Exception as e:
         logger.error(f"Erreur principale: {e}")
