@@ -57,8 +57,13 @@ Pour fonctionner correctement, il vous faudra créer un fichier .env dans le mê
     # Définissez ici la combinaison clavier qui déclenche la capture/analyse.
     INPUT=ctrl+alt+g
 
+    INPUT=ctrl+alt+g
+
     # Raccourci pour arrêter la frappe en cours (stopinput)
     STOPINPUT=ctrl+alt+s
+
+    # Raccourci pour mettre en pause / reprendre la frappe
+    PAUSEINPUT=ctrl+alt+p
 
     # Raccourci pour terminer complètement le programme (endinput)
     ENDINPUT=F10

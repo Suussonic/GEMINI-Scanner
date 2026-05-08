@@ -79,17 +79,16 @@ logger.info(
     f"start_delay={AUTOWRITER_START_DELAY}s | char_delay={AUTOWRITER_CHAR_DELAY}s | jitter=±{AUTOWRITER_JITTER}s"
 )
 
-# Raccourci configuré via .env
-INPUT_HOTKEY = os.getenv('INPUT', 'ctrl+alt+g')
-logger.info(f"Raccourci d'entrée configuré: {INPUT_HOTKEY}")
+# Raccourcis clavier (valeurs par défaut si absent du .env)
+INPUT_HOTKEY      = os.getenv('INPUT',      'ctrl+alt+g').strip()
+STOPINPUT_HOTKEY  = os.getenv('STOPINPUT',  'ctrl+alt+s').strip()
+PAUSEINPUT_HOTKEY = os.getenv('PAUSEINPUT', 'ctrl+alt+p').strip()
+ENDINPUT_HOTKEY   = os.getenv('ENDINPUT',   'F10').strip()
+logger.info(f"Raccourcis — capture: {INPUT_HOTKEY} | stop: {STOPINPUT_HOTKEY} | pause: {PAUSEINPUT_HOTKEY} | end: {ENDINPUT_HOTKEY}")
 
-# Raccourcis stop / end depuis .env
-STOPINPUT_HOTKEY = os.getenv('STOPINPUT', 'ctrl+alt+s')
-ENDINPUT_HOTKEY = os.getenv('ENDINPUT', 'F10')
-logger.info(f"Raccourci stop typing: {STOPINPUT_HOTKEY} | Raccourci end program: {ENDINPUT_HOTKEY}")
-
-# Event pour arrêter la frappe en cours
-STOP_TYPING_EVENT = threading.Event()
+# Events pour contrôler la frappe
+STOP_TYPING_EVENT  = threading.Event()
+PAUSE_TYPING_EVENT = threading.Event()
 
 # Charge dynamiquement le module 'human typing.py' si HUMANSPEED activé
 human_typing_func = None
@@ -234,7 +233,7 @@ def preflight_check():
         print("- Notifications: winotify NOT available (utilise logs)")
 
     # Raccourcis
-    print(f"- Hotkey capture: {INPUT_HOTKEY} | stop: {STOPINPUT_HOTKEY} | end: {ENDINPUT_HOTKEY}")
+    print(f"- Hotkey capture: {INPUT_HOTKEY} | stop: {STOPINPUT_HOTKEY} | pause: {PAUSEINPUT_HOTKEY} | end: {ENDINPUT_HOTKEY}")
 
     if all_ok:
         notify_toast("Gemini Scanner", "Pré-check OK — prêt à l'emploi")
@@ -247,32 +246,69 @@ def preflight_check():
 
 # ---- Fonction pour écrire automatiquement la réponse ----
 
-def type_answer(text: str):
-    """Tape la réponse dans la fenêtre active.
+def _wait_if_paused():
+    """Bloque tant que la frappe est en pause. Retourne False si stop demandé."""
+    while PAUSE_TYPING_EVENT.is_set():
+        if STOP_TYPING_EVENT.is_set():
+            return False
+        time.sleep(0.05)
+    return not STOP_TYPING_EVENT.is_set()
 
-    REALTIMING=True  -> frappe "humaine" (delai configuré + jitter).
-    REALTIMING=False -> mode rapide (ancienne version: ~0.004s par char, start_delay 0.4s).
+
+def type_answer(text: str):
+    """Tape la réponse dans la fenêtre active avec support stop/pause.
+
+    REALTIMING=True  -> frappe naturelle avec rythme variable.
+    REALTIMING=False -> mode rapide.
     """
     if not text:
         return
     try:
         if REALTIMING:
-            # Mode naturel
             time.sleep(AUTOWRITER_START_DELAY)
-            for ch in text:
+            burst = 0  # compteur de chars consécutifs sans pause
+            for i, ch in enumerate(text):
+                if not _wait_if_paused():
+                    logger.info("AUTOWRITER interrompu.")
+                    return
+
                 if ch == '\n':
                     keyboard.send('enter')
+                    time.sleep(random.uniform(0.20, 0.45))
+                    burst = 0
+                    continue
+
+                keyboard.write(ch)
+                burst += 1
+
+                # Délai selon contexte
+                if ch in '.!?':
+                    delay = random.uniform(0.30, 0.60)
+                    burst = 0
+                elif ch in ',;:':
+                    delay = random.uniform(0.15, 0.30)
+                    burst = 0
+                elif ch == ' ':
+                    delay = random.uniform(0.06, 0.18)
+                    burst = 0
                 else:
-                    keyboard.write(ch)
-                delay = AUTOWRITER_CHAR_DELAY
-                if AUTOWRITER_JITTER > 0:
-                    delay = max(0.0, AUTOWRITER_CHAR_DELAY + random.uniform(-AUTOWRITER_JITTER, AUTOWRITER_JITTER))
+                    # Accélération légère en milieu de mot, plus lent en début
+                    speed_factor = 1.0 if burst <= 2 else random.uniform(0.7, 0.95)
+                    base = AUTOWRITER_CHAR_DELAY * speed_factor
+                    delay = max(0.03, random.gauss(base, AUTOWRITER_JITTER * 0.7))
+
+                # Micro-pause de réflexion aléatoire (~1 chance sur 30)
+                if burst > 0 and random.random() < 0.033:
+                    delay += random.uniform(0.15, 0.45)
+
                 time.sleep(delay)
             logger.info("AUTOWRITER terminé (mode REALTIMING).")
         else:
-            # Mode rapide hérité
             time.sleep(0.4)
             for ch in text:
+                if not _wait_if_paused():
+                    logger.info("AUTOWRITER interrompu.")
+                    return
                 if ch == '\n':
                     keyboard.send('enter')
                 else:
@@ -335,10 +371,10 @@ def capture_et_analyse():
 
     # 1) Écriture automatique d'abord (sinon la popup prend le focus et la frappe s'arrête)
     if AUTOWRITER:
+        STOP_TYPING_EVENT.clear()
+        PAUSE_TYPING_EVENT.clear()
         if HUMANSPEED and human_typing_func:
-            # Utilise module externe pour frapper de façon humaine
             try:
-                # human_like_typing peut accepter un param stop_event; on tente de l'appeler avec
                 try:
                     human_typing_func(answer, base_delay=AUTOWRITER_CHAR_DELAY, random_factor=AUTOWRITER_JITTER, typo_chance=0.04, stop_event=STOP_TYPING_EVENT)
                 except TypeError:
@@ -350,13 +386,22 @@ def capture_et_analyse():
         else:
             type_answer(answer)
 
-    # (Popup supprimée, plus d'affichage Tkinter)
-
     pyperclip.copy(answer)
     notify_toast("Gemini Scanner", "Réponse copiée (presse-papiers)")
     logger.info("Réponse copiée dans le presse-papiers")
 
 # ==== Raccourcis clavier ==== 
+
+def _toggle_pause():
+    if PAUSE_TYPING_EVENT.is_set():
+        PAUSE_TYPING_EVENT.clear()
+        logger.info("Frappe reprise.")
+        notify_toast("Gemini Scanner", "Frappe reprise")
+    else:
+        PAUSE_TYPING_EVENT.set()
+        logger.info("Frappe mise en pause.")
+        notify_toast("Gemini Scanner", "Frappe en pause — rappuyez pour reprendre")
+
 
 def ecoute_clavier():
     logger.info("Initialisation des raccourcis clavier")
@@ -365,11 +410,12 @@ def ecoute_clavier():
         logger.info("Raccourci STOPINPUT pressé, arrêt de la frappe en cours."),
         STOP_TYPING_EVENT.set()
     ))
+    keyboard.add_hotkey(PAUSEINPUT_HOTKEY, lambda: threading.Thread(target=_toggle_pause, daemon=True).start())
     keyboard.add_hotkey(ENDINPUT_HOTKEY, lambda: (
         logger.info("Raccourci ENDINPUT pressé, arrêt du script."),
         os._exit(0)
     ))
-    logger.info(f"En attente de {INPUT_HOTKEY} (capture), {STOPINPUT_HOTKEY} (stop) ou {ENDINPUT_HOTKEY} (fin)")
+    logger.info(f"En attente de {INPUT_HOTKEY} (capture) | {PAUSEINPUT_HOTKEY} (pause/reprise) | {STOPINPUT_HOTKEY} (stop) | {ENDINPUT_HOTKEY} (fin)")
     keyboard.wait()
 
 if __name__ == "__main__":
