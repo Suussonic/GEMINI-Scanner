@@ -266,42 +266,77 @@ def type_answer(text: str):
     try:
         if REALTIMING:
             time.sleep(AUTOWRITER_START_DELAY)
-            burst = 0  # compteur de chars consécutifs sans pause
-            for i, ch in enumerate(text):
+
+            # Modèle de vitesse : chaque "session de frappe" a sa propre cadence de base
+            # simulant qu'on tape plus vite sur certains passages, plus lentement sur d'autres
+            session_speed = random.uniform(0.75, 1.25)  # multiplicateur global initial
+
+            word_len = 0        # longueur du mot courant (pour simuler l'élan)
+            prev_ch  = ''
+
+            for ch in text:
                 if not _wait_if_paused():
                     logger.info("AUTOWRITER interrompu.")
                     return
 
+                # --- Frappe du caractère ---
                 if ch == '\n':
                     keyboard.send('enter')
-                    time.sleep(random.uniform(0.20, 0.45))
-                    burst = 0
+                    time.sleep(random.uniform(0.18, 0.55))
+                    word_len = 0
+                    # Légère redéfinition de la vitesse de session à chaque ligne
+                    session_speed = random.uniform(0.75, 1.25)
+                    prev_ch = ch
                     continue
 
                 keyboard.write(ch)
-                burst += 1
 
-                # Délai selon contexte
+                # --- Calcul du délai ---
                 if ch in '.!?':
-                    delay = random.uniform(0.30, 0.60)
-                    burst = 0
+                    # Fin de phrase : pause marquée
+                    delay = random.uniform(0.28, 0.65)
+                    word_len = 0
+                    session_speed = random.uniform(0.80, 1.20)  # nouveau souffle
                 elif ch in ',;:':
-                    delay = random.uniform(0.15, 0.30)
-                    burst = 0
+                    delay = random.uniform(0.12, 0.28)
+                    word_len = 0
                 elif ch == ' ':
-                    delay = random.uniform(0.06, 0.18)
-                    burst = 0
+                    # Entre les mots : pause inter-mot variable
+                    delay = random.uniform(0.05, 0.22)
+                    word_len = 0
+                    # Chance de micro-hésitation entre deux mots (cherche ses mots)
+                    if random.random() < 0.08:
+                        delay += random.uniform(0.20, 0.60)
                 else:
-                    # Accélération légère en milieu de mot, plus lent en début
-                    speed_factor = 1.0 if burst <= 2 else random.uniform(0.7, 0.95)
-                    base = AUTOWRITER_CHAR_DELAY * speed_factor
-                    delay = max(0.03, random.gauss(base, AUTOWRITER_JITTER * 0.7))
+                    word_len += 1
+                    # Élan : les 1ers chars d'un mot sont plus lents, on accélère ensuite
+                    if word_len <= 2:
+                        ramp = random.uniform(1.1, 1.4)
+                    elif word_len <= 5:
+                        ramp = random.uniform(0.9, 1.1)
+                    else:
+                        ramp = random.uniform(0.65, 0.85)  # vitesse de croisière
 
-                # Micro-pause de réflexion aléatoire (~1 chance sur 30)
-                if burst > 0 and random.random() < 0.033:
-                    delay += random.uniform(0.15, 0.45)
+                    base = AUTOWRITER_CHAR_DELAY * session_speed * ramp
+
+                    # Distribution log-normale : simule des pics de lenteur naturels
+                    sigma = AUTOWRITER_JITTER * 0.6
+                    delay = max(0.025, random.lognormvariate(
+                        mu=max(-4.0, __import__('math').log(base) - sigma**2 / 2),
+                        sigma=sigma
+                    ))
+
+                    # Double frappe : légère hésitation sur un même caractère répété
+                    if ch == prev_ch and random.random() < 0.15:
+                        delay += random.uniform(0.04, 0.12)
+
+                    # Micro-pause de réflexion spontanée (~2 % des chars)
+                    if random.random() < 0.02:
+                        delay += random.uniform(0.25, 0.80)
 
                 time.sleep(delay)
+                prev_ch = ch
+
             logger.info("AUTOWRITER terminé (mode REALTIMING).")
         else:
             time.sleep(0.4)
